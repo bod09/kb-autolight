@@ -21,6 +21,8 @@ The daemon polls the ambient light sensor and controls the keyboard backlight vi
 
 Turning **on** is instant — when it goes dark you need to see the keys now. Turning **off** is debounced (default: 3 consecutive readings) to prevent flickering from brief sensor fluctuations.
 
+In a dark room the keyboard's own light can reach the sensor and look like the room got brighter. The daemon notices this (it goes dark again the moment the backlight switches off), measures how much the backlight adds to the reading, and ignores that amount while the backlight is on. You may see one off/on blink the first time this happens after the service starts.
+
 ## Prerequisites
 
 - A Linux laptop with:
@@ -181,6 +183,17 @@ journalctl --user -u kb-autolight --no-pager -n 50
 Common causes:
 - Sensor path changed after a kernel update (restart the service to re-detect)
 - Invalid config values (dark must be less than light)
+
+### Backlight keeps switching on and off
+
+Check the logs while it is happening:
+
+```bash
+journalctl --user -u kb-autolight -f
+```
+
+- Alternating `Light detected` / `Dark detected` lines mean the sensor is reacting to the backlight itself. The daemon compensates for this automatically after the first blink. If it still flickers, raise `light` in the config or lower `brightness`.
+- Repeated `Backlight was reset` lines mean something else is changing the backlight (the brightness key, your desktop's power settings, or the laptop firmware). After 3 resets in 2 minutes the daemon stops restoring it until the next time it gets dark.
 
 ## License
 
