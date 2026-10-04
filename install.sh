@@ -74,8 +74,11 @@ cp "$SCRIPT_DIR/$DAEMON_NAME.service" "$SERVICE_DIR/$DAEMON_NAME.service"
 info "Reloading systemd user daemon..."
 systemctl --user daemon-reload
 
+# restart rather than "enable --now", which leaves an already running
+# service on the old script when updating
 info "Enabling and starting $DAEMON_NAME service..."
-systemctl --user enable --now "$DAEMON_NAME.service"
+systemctl --user enable "$DAEMON_NAME.service"
+systemctl --user restart "$DAEMON_NAME.service"
 
 echo ""
 info "Installation complete!"
