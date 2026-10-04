@@ -31,6 +31,15 @@ CONFIG_PATH = os.path.expanduser("~/.config/kb-autolight/kb-autolight.conf")
 SENSOR_GLOB = "/sys/bus/iio/devices/iio:device*/in_illuminance_raw"
 KBD_BACKLIGHT_GLOB = "/sys/class/leds/*kbd_backlight"
 
+# Going dark again within this many polls of switching the backlight off
+# means the "light" we saw was the backlight itself.
+FLAP_POLLS = 3
+
+# Stop restoring the backlight if something else changes it this many times
+# within RESTORE_WINDOW seconds, rather than fighting over it forever.
+RESTORE_LIMIT = 3
+RESTORE_WINDOW = 120
+
 running = True
 
 
@@ -192,6 +201,18 @@ def main():
     counter = 0
     last_set = 0
 
+    # Sensor reading caused by the backlight's own light. In a dark room the
+    # glow from the keys can be enough to cross the light threshold, which
+    # would switch the backlight off, go dark, and switch it back on forever.
+    # It is learned the first time that happens and added to the threshold.
+    glow = 0
+    peak = 0
+    off_time = None
+    off_peak = 0
+
+    restore = True
+    restores = []
+
     while running:
         raw = read_sensor(sensor_path)
         if raw is None:
@@ -201,30 +222,56 @@ def main():
         now = time.monotonic()
 
         if state == "bright" and raw <= dark:
+            if off_time is not None and now - off_time <= FLAP_POLLS * interval:
+                glow = max(glow, off_peak - raw)
+                logging.info(
+                    "Dark again right after switching off, so the sensor was seeing "
+                    "the backlight itself. Now ignoring %d of its reading while on",
+                    glow,
+                )
             # Turn on immediately — you need to see the keys now
             set_backlight(kbd_device, brightness)
             state = "dark"
             counter = 0
+            peak = 0
+            off_time = None
             last_set = now
+            restore = True
+            restores = []
             logging.info("Dark detected (raw=%d <= %d), backlight ON at %d%%", raw, dark, brightness)
-        elif state == "dark" and raw > light:
+        elif state == "dark" and raw > light + glow:
             # Debounce before turning off — avoid flicker
             counter += 1
+            peak = max(peak, raw)
             if counter >= debounce:
                 set_backlight(kbd_device, 0)
                 state = "bright"
                 counter = 0
+                off_time = now
+                off_peak = peak
                 last_set = now
-                logging.info("Light detected (raw=%d > %d), backlight OFF", raw, light)
+                logging.info("Light detected (raw=%d > %d), backlight OFF", raw, light + glow)
         else:
             counter = 0
+            peak = 0
             # Recover from suspend/resume — the EC can silently zero the
             # backlight. Check the actual value and only write if wrong.
-            if state == "dark" and now - last_set >= 5:
+            if state == "dark" and restore and now - last_set >= 5:
                 actual = get_backlight(kbd_device)
                 if actual is not None and actual != brightness:
-                    set_backlight(kbd_device, brightness)
-                    logging.info("Backlight was reset (was %d), restoring to %d%%", actual, brightness)
+                    restores = [t for t in restores if now - t < RESTORE_WINDOW]
+                    restores.append(now)
+                    if len(restores) >= RESTORE_LIMIT:
+                        restore = False
+                        logging.warning(
+                            "Backlight was changed %d times in %ds by something else "
+                            "(brightness key, desktop power settings or firmware). "
+                            "Leaving it alone until the next time it gets dark",
+                            RESTORE_LIMIT, RESTORE_WINDOW,
+                        )
+                    else:
+                        set_backlight(kbd_device, brightness)
+                        logging.info("Backlight was reset (was %d), restoring to %d%%", actual, brightness)
                 last_set = now
 
         time.sleep(interval)
