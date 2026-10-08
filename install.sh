@@ -52,6 +52,23 @@ else
     info "Ambient light sensor found: $(echo "$SENSOR_MATCHES" | head -1)"
 fi
 
+# --- Remove the pre-rename install (fw13-kb-autolight) ---
+# Leaving it running alongside the new service makes the two fight over the
+# backlight every 5 seconds, and the old config silently wins.
+
+OLD_NAME="fw13-kb-autolight"
+if [ -f "$SERVICE_DIR/$OLD_NAME.service" ] || [ -f "$BIN_DIR/$OLD_NAME.py" ]; then
+    info "Found old $OLD_NAME install, removing it"
+    systemctl --user disable --now "$OLD_NAME.service" &>/dev/null || true
+    rm -f "$SERVICE_DIR/$OLD_NAME.service" "$BIN_DIR/$OLD_NAME.py"
+    if [ -f "$HOME/.config/$OLD_NAME/$OLD_NAME.conf" ] && [ ! -f "$CONFIG_DIR/$DAEMON_NAME.conf" ]; then
+        info "Moving old config to $CONFIG_DIR/$DAEMON_NAME.conf"
+        mkdir -p "$CONFIG_DIR"
+        mv "$HOME/.config/$OLD_NAME/$OLD_NAME.conf" "$CONFIG_DIR/$DAEMON_NAME.conf"
+    fi
+    rm -rf "$HOME/.config/$OLD_NAME"
+fi
+
 # --- Install ---
 
 info "Installing daemon script to $BIN_DIR/"

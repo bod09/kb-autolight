@@ -24,6 +24,16 @@ if systemctl --user is-enabled "$DAEMON_NAME.service" &>/dev/null; then
     systemctl --user disable "$DAEMON_NAME.service"
 fi
 
+# --- Also remove the pre-rename install (fw13-kb-autolight), if any ---
+
+OLD_NAME="fw13-kb-autolight"
+if [ -f "$SERVICE_DIR/$OLD_NAME.service" ] || [ -f "$BIN_DIR/$OLD_NAME.py" ]; then
+    info "Removing old $OLD_NAME service..."
+    systemctl --user disable --now "$OLD_NAME.service" &>/dev/null || true
+    rm -f "$SERVICE_DIR/$OLD_NAME.service" "$BIN_DIR/$OLD_NAME.py"
+    rm -rf "$HOME/.config/$OLD_NAME"
+fi
+
 # --- Remove files ---
 
 if [ -f "$SERVICE_DIR/$DAEMON_NAME.service" ]; then

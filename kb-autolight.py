@@ -7,12 +7,14 @@ Uses debounce to avoid flickering when turning off.
 """
 
 import configparser
+import fcntl
 import glob
 import logging
 import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -167,6 +169,33 @@ def set_backlight(device, value):
         logging.error("Failed to set backlight: timed out")
 
 
+def acquire_lock():
+    """Refuse to run a second copy. Two instances (say the service plus one
+    started by hand with a different config) each keep "restoring" their own
+    brightness, so the backlight flips between the two values forever."""
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    lock_path = os.path.join(runtime_dir, "kb-autolight.lock")
+    lock = open(lock_path, "a+")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock.seek(0)
+        pid = lock.read().strip()
+        try:
+            cmd = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode().strip()
+        except OSError:
+            cmd = "unknown command"
+        logging.error(
+            "Another copy is already running: pid %s (%s). Stop it first, "
+            "e.g. with: systemctl --user stop kb-autolight", pid or "?", cmd,
+        )
+        sys.exit(1)
+    lock.truncate(0)
+    lock.write(str(os.getpid()))
+    lock.flush()
+    return lock
+
+
 def read_sensor(sensor_path):
     try:
         return int(Path(sensor_path).read_text().strip())
@@ -185,6 +214,8 @@ def main():
 
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
+
+    lock = acquire_lock()  # noqa: F841 (held open for the life of the process)
 
     dark, light, brightness, interval, debounce, sensor_override, kbd_override = load_config()
     sensor_path = find_sensor(sensor_override)
