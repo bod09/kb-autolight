@@ -193,7 +193,7 @@ journalctl --user -u kb-autolight -f
 ```
 
 - Alternating `Light detected` / `Dark detected` lines mean the sensor is reacting to the backlight itself. The daemon compensates for this automatically after the first blink. If it still flickers, raise `light` in the config or lower `brightness`.
-- Repeated `Backlight was reset` lines mean something else is changing the backlight (the brightness key, your desktop's power settings, or the laptop firmware). After 3 resets in 2 minutes the daemon stops restoring it until the next time it gets dark.
+- Repeated `Backlight was reset` lines mean something else is changing the backlight (the brightness key, your desktop's power settings, or the laptop firmware). Two copies of the daemon fighting each other looks exactly like this too, for example the old `fw13-kb-autolight` service left over from before the rename, or a copy started by hand while the service is running. Re-running `./install.sh` removes the old service, and a second copy now refuses to start. After 3 resets in 2 minutes the daemon stops restoring it until the next time it gets dark.
 
 ## License
 
