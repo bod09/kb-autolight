@@ -1,0 +1,76 @@
+name: Bug report
+description: The backlight does the wrong thing, or the daemon fails to start
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Most problems can only be diagnosed from the logs and the sensor readings, so please fill in the command output sections. Each command can be pasted into a terminal as is.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you see, and what you expected instead.
+      placeholder: The backlight turns on in the dark, then switches off again after a few seconds, then on again, repeatedly.
+    validations:
+      required: true
+  - type: input
+    id: laptop
+    attributes:
+      label: Laptop
+      placeholder: Framework Laptop 13 (AMD Ryzen 7040)
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distro and desktop
+      placeholder: Fedora 43, KDE Plasma 6.4 (Wayland)
+    validations:
+      required: true
+  - type: textarea
+    id: services
+    attributes:
+      label: Running copies of the daemon
+      description: Paste the output of the command below. There should be exactly one unit listed. An old `fw13-kb-autolight` service or a copy started by hand will fight with the service.
+      value: |
+        ```
+        $ systemctl --user list-units --all '*autolight*'; pgrep -af autolight
+
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Daemon log
+      description: Paste the output of the command below, taken while the problem is happening.
+      value: |
+        ```
+        $ journalctl --user -u kb-autolight --no-pager -n 50
+
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: Paste your config with the comments stripped.
+      value: |
+        ```
+        $ grep -v '^#' ~/.config/kb-autolight/kb-autolight.conf | grep -v '^$'
+
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: sensor
+    attributes:
+      label: Sensor and backlight readings
+      description: Paste the output of the command below. Run it in the lighting where the problem happens, and note what the lighting was.
+      value: |
+        ```
+        $ ls /sys/bus/iio/devices/iio:device*/in_illuminance_raw /sys/class/leds/*kbd_backlight; for i in 1 2 3 4 5; do cat /sys/bus/iio/devices/iio:device*/in_illuminance_raw; sleep 1; done
+
+        ```
